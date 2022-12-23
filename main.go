@@ -16,13 +16,13 @@ func getTemperature(host string) string {
 	// Send an HTTP request to the URL and retrieve the response body
 	resp, err := http.Get(host)
 	if err != nil {
-		log.Fatal("Cannot get temperature from host %s.\n%s", host, err)
+		log.Fatal("Cannot get temperature from host.\n", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal("Cannot read getTemperature response body.\n%s", err)
+		log.Fatal("Cannot read getTemperature response body.\n", err)
 	}
 	return string(body)
 }
@@ -31,13 +31,13 @@ func sendViaSsh(keyPath string, host string, command string) string {
 	// Read the private key file
 	key, err := ioutil.ReadFile(keyPath)
 	if err != nil {
-		log.Println("Error while reading key file.\n%s", err)
+		return fmt.Sprintf("SSH - Error while reading key file.\n%s", err)
 	}
 
 	// Create the Signer for the private key
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
-		log.Println("Error while creating signer for the private key.\n%s", err)
+		return fmt.Sprintf("SSH - Error while creating signer for the private key.\n%s", err)
 	}
 
 	// Set up the SSH config
@@ -52,21 +52,21 @@ func sendViaSsh(keyPath string, host string, command string) string {
 	// Connect to the remote host
 	client, err := ssh.Dial("tcp", host, config)
 	if err != nil {
-		log.Println("Error connecting to remote host.\n%s", err)
+		return fmt.Sprintf("SSH - Error connecting to remote host.\n%s", err)
 	}
 	defer client.Close()
 
 	// Open a new session
 	session, err := client.NewSession()
 	if err != nil {
-		log.Println("Error opening console session.\n%s", err)
+		return fmt.Sprintf("SSH - Error opening console session.\n%s", err)
 	}
 	defer session.Close()
 
 	// Output from command
 	output, err := session.Output(command)
 	if err != nil {
-		log.Println("Error getting output from console.\n%s", err)
+		return fmt.Sprintf("SSH - Error getting output from console.\n%s", err)
 	}
 
 	return string(output)
@@ -79,7 +79,7 @@ func thingspeak(temperature string, apiKey string) {
 	}
 	_, err := ts.Update()
 	if err != nil {
-		log.Println("Couldn't update thingspeak.\n%s", err)
+		log.Println("Thingspeak - Couldn't update.\n", err)
 	}
 }
 
@@ -87,13 +87,15 @@ func thingsboard(temperature string, domain string, apiKey string) {
 	value := map[string]string{"temperature": temperature}
 	json_data, err := json.Marshal(value)
 	if err != nil {
-		log.Println("Failed to marshal temperature data.\n%s", err)
+		log.Println("Thingsboard - Failed to marshal temperature data.\n", err)
+		return
 	}
-	thingsboardLink := fmt.Sprintf("https://%s/api/v1/%s/telemetry", domain, apiKey)
-	_, err = http.Post(thingsboardLink, "application/json", bytes.NewBuffer(json_data))
 
+	thingsboardLink := fmt.Sprintf("https://%s/api/v1/%s/telemetry", domain, apiKey)
+
+	_, err = http.Post(thingsboardLink, "application/json", bytes.NewBuffer(json_data))
 	if err != nil {
-		log.Println("Failed to send data to ThingsBoard.\n%s", err)
+		log.Println("Thingsboard - Failed to send data.\n", err)
 	}
 }
 
