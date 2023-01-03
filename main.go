@@ -9,8 +9,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"time"
 	"sync"
+	"time"
 )
 
 func getTemperature(host string) string {
@@ -106,7 +106,6 @@ func thingsboard(temperature string, domain string, apiKey string, wg *sync.Wait
 	defer wg.Done()
 }
 
-
 func main() {
 	////
 	// Path of SSH private key to connect to host
@@ -122,15 +121,14 @@ func main() {
 	thingsboardDomain := "thingsboard.example.com"
 	////
 
+	// Get the temperature
+	temperature := getTemperature(temperatureHost)
+	// Create command to execute on remote host
+	command := fmt.Sprintf("echo \"%s - %s\" > /var/www/html/index.html", time.Now().Format(time.UnixDate), temperature)
+
 	// Add wait group to wait for go routines before exiting main function
 	wg := new(sync.WaitGroup)
 	wg.Add(3)
-	
-	// Get the temperature
-	temperature := getTemperature(temperatureHost)
-
-	// Create command to execute on remote host
-	command := fmt.Sprintf("echo \"%s - %s\" > /var/www/html/index.html", time.Now().Format(time.UnixDate), temperature)
 
 	// Send temperature to Hetzner
 	go sendViaSsh(keyPath, host, command, wg)
@@ -140,6 +138,6 @@ func main() {
 
 	// send temperature to Thingsboard
 	go thingsboard(temperature, thingsboardDomain, thingsboardApiKey, wg)
-	
+
 	wg.Wait()
 }
