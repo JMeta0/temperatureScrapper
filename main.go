@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"sync"
 )
 
 func getTemperature(host string) string {
@@ -24,10 +25,11 @@ func getTemperature(host string) string {
 	if err != nil {
 		log.Fatal("Cannot read getTemperature response body.\n", err)
 	}
+
 	return string(body)
 }
 
-func sendViaSsh(keyPath string, host string, command string) string {
+func sendViaSsh(keyPath string, host string, command string, wg *sync.WaitGroup) string {
 	// Read the private key file
 	key, err := ioutil.ReadFile(keyPath)
 	if err != nil {
@@ -69,10 +71,11 @@ func sendViaSsh(keyPath string, host string, command string) string {
 		return fmt.Sprintf("SSH - Error getting output from console.\n%s", err)
 	}
 
+	defer wg.Done()
 	return string(output)
 }
 
-func thingspeak(temperature string, apiKey string) {
+func thingspeak(temperature string, apiKey string, wg *sync.WaitGroup) {
 	ts := gothingspeak.NewChannelWriter(apiKey, true)
 	if !ts.AddField(1, temperature) {
 		return
@@ -81,9 +84,11 @@ func thingspeak(temperature string, apiKey string) {
 	if err != nil {
 		log.Println("Thingspeak - Couldn't update.\n", err)
 	}
+
+	defer wg.Done()
 }
 
-func thingsboard(temperature string, domain string, apiKey string) {
+func thingsboard(temperature string, domain string, apiKey string, wg *sync.WaitGroup) {
 	value := map[string]string{"temperature": temperature}
 	json_data, err := json.Marshal(value)
 	if err != nil {
@@ -97,7 +102,10 @@ func thingsboard(temperature string, domain string, apiKey string) {
 	if err != nil {
 		log.Println("Thingsboard - Failed to send data.\n", err)
 	}
+
+	defer wg.Done()
 }
+
 
 func main() {
 	////
@@ -114,6 +122,10 @@ func main() {
 	thingsboardDomain := "thingsboard.example.com"
 	////
 
+	// Add wait group to wait for go routines before exiting main function
+	wg := new(sync.WaitGroup)
+	wg.Add(3)
+	
 	// Get the temperature
 	temperature := getTemperature(temperatureHost)
 
@@ -121,11 +133,13 @@ func main() {
 	command := fmt.Sprintf("echo \"%s - %s\" > /var/www/html/index.html", time.Now().Format(time.UnixDate), temperature)
 
 	// Send temperature to Hetzner
-	sendViaSsh(keyPath, host, command)
+	go sendViaSsh(keyPath, host, command, wg)
 
 	// Send temperature to Thingspeak
-	thingspeak(temperature, thingspeakApiKey)
+	go thingspeak(temperature, thingspeakApiKey, wg)
 
 	// send temperature to Thingsboard
-	thingsboard(temperature, thingsboardDomain, thingsboardApiKey)
+	go thingsboard(temperature, thingsboardDomain, thingsboardApiKey, wg)
+	
+	wg.Wait()
 }
